@@ -1,0 +1,10 @@
+[Unit]
+Description=Volume daemon
+After=pulseaudio.service
+
+[Service]
+ExecStart=/usr/bin/volumectl -D
+Restart=always
+
+[Install]
+WantedBy=basic.target

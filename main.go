@@ -25,11 +25,13 @@ Usage:
   volume --version
 
 Options:
-  -D --daemon      Start volume daemon (client for pulseaudio).
-  --socket <path>  Path to daemon socket.
-                    [default: ` + defaultSocketPath + `]
-  -h --help        Show this screen.
-  --version        Show version.
+  -D --daemon               Start volume daemon (client for pulseaudio).
+  --socket <path>           Path to daemon socket.
+                             [default: ` + defaultSocketPath + `]
+  -f --volume-format <fmt>  Format volume value when printing it.
+                             [default: %.2f]
+  -h --help                 Show this screen.
+  --version                 Show version.
 `
 )
 

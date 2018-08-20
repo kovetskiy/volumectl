@@ -57,7 +57,7 @@ func handleClient(args map[string]interface{}) error {
 
 	switch raw.Signature() {
 	case SignatureVolume:
-		fmt.Println(raw.(*PacketVolume).Value * 100)
+		fmt.Printf(args["--volume-format"].(string)+"\n", raw.(*PacketVolume).Value*100)
 	case SignatureError:
 		return karma.Format(
 			raw.(*PacketError).Error,

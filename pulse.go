@@ -3,8 +3,8 @@ package main
 import (
 	"sync"
 
+	"github.com/kovetskiy/pulseaudio"
 	"github.com/reconquest/karma-go"
-	"mrogalski.eu/go/pulseaudio"
 )
 
 type Pulse struct {

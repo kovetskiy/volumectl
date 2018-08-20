@@ -24,15 +24,33 @@ func (pulse *Pulse) Close() {
 	})
 }
 
+func (pulse *Pulse) Reconnect() error {
+	pulse.Lock()
+	defer pulse.Unlock()
+
+	pulse.Close()
+
+	return pulse.init()
+}
+
 func initPulse() (*Pulse, error) {
 	pulse := &Pulse{}
 
+	err := pulse.init()
+	if err != nil {
+		return nil, err
+	}
+
+	return pulse, nil
+}
+
+func (pulse *Pulse) init() error {
 	var err error
 	withMeasure("pulse:connect", func() {
 		pulse.client, err = pulseaudio.NewClient()
 	})
 	if err != nil {
-		return nil, karma.Format(
+		return karma.Format(
 			err,
 			"unable to connect to pulseaudio socket",
 		)
@@ -42,7 +60,7 @@ func initPulse() (*Pulse, error) {
 		pulse.info, err = pulse.client.ServerInfo()
 	})
 	if err != nil {
-		return nil, karma.Format(
+		return karma.Format(
 			err,
 			"unable to get server info",
 		)
@@ -52,13 +70,13 @@ func initPulse() (*Pulse, error) {
 		pulse.volume, err = pulse.client.Volume()
 	})
 	if err != nil {
-		return nil, karma.Format(
+		return karma.Format(
 			err,
 			"unable to get current volume level",
 		)
 	}
 
-	return pulse, nil
+	return nil
 }
 
 func (pulse *Pulse) GetVolume() float32 {
@@ -85,4 +103,16 @@ func (pulse *Pulse) ChangeVolume(diff float32) (float32, error) {
 	pulse.Unlock()
 
 	return volume, err
+}
+
+func isNoSuchEntityError(err error) bool {
+	if err != nil {
+		if specific, ok := err.(*pulseaudio.Error); ok {
+			if specific.Code == 0x5 {
+				return true
+			}
+		}
+	}
+
+	return false
 }

@@ -84,7 +84,31 @@ func serveDaemonConnection(pulse *Pulse, socket *Socket, conn net.Conn) {
 	var reply Packetable
 	switch raw.Signature() {
 	case SignatureChange:
-		volume, err := pulse.ChangeVolume(raw.(*PacketChange).Diff)
+		var volume float32
+		var retried bool
+
+		for {
+			volume, err = pulse.ChangeVolume(raw.(*PacketChange).Diff)
+			if isNoSuchEntityError(err) {
+				if retried {
+					break
+				}
+
+				err := pulse.Reconnect()
+				if err != nil {
+					err = karma.Format(
+						err,
+						"unable to reconnect to pulseaudio",
+					)
+					break
+				}
+
+				retried = true
+			}
+
+			break
+		}
+
 		if err != nil {
 			reply = PacketError{err.Error()}
 		} else {

@@ -5,9 +5,19 @@ import (
 
 	"github.com/godbus/dbus"
 	native "github.com/kovetskiy/pulseaudio"
+	bus "github.com/kovetskiy/pulseaudio-bus"
 	"github.com/reconquest/karma-go"
-	bus "github.com/sqp/pulseaudio"
 )
+
+var (
+	_ PulseSubscriber = (*Pulse)(nil)
+)
+
+type PulseSubscriber interface {
+	bus.OnNewSink
+	bus.OnSinkRemoved
+	bus.OnDeviceActivePortUpdated
+}
 
 type Pulse struct {
 	client *native.Client
@@ -32,6 +42,8 @@ func (pulse *Pulse) Reconnect() error {
 	defer pulse.Unlock()
 
 	pulse.Close()
+
+	pulse.Once = sync.Once{}
 
 	return pulse.initNative()
 }
@@ -74,19 +86,22 @@ func (pulse *Pulse) initBus() error {
 		)
 	}
 
-	errs := pulse.bus.Register(pulse)
-	if errs != nil {
-		for _, err := range errs {
-			logger.Error(err)
+	var regErr error
+	withMeasure("pulse:dbus:register-handlers", func() {
+		errs := pulse.bus.Register(pulse)
+		if errs != nil {
+			for _, err := range errs {
+				logger.Error(err)
+			}
+
+			regErr = karma.Format(
+				err,
+				"unable to register dbus client",
+			)
 		}
+	})
 
-		return karma.Format(
-			err,
-			"unable to register dbus client",
-		)
-	}
-
-	return nil
+	return regErr
 }
 
 func (pulse *Pulse) initNative() error {
@@ -101,7 +116,7 @@ func (pulse *Pulse) initNative() error {
 		)
 	}
 
-	withMeasure("get server info", func() {
+	withMeasure("pulse:get-server-info", func() {
 		pulse.info, err = pulse.client.ServerInfo()
 	})
 	if err != nil {
@@ -111,7 +126,7 @@ func (pulse *Pulse) initNative() error {
 		)
 	}
 
-	withMeasure("get volume", func() {
+	withMeasure("pulse:get-volume", func() {
 		pulse.volume, err = pulse.client.Volume()
 	})
 	if err != nil {
@@ -137,7 +152,7 @@ func (pulse *Pulse) ChangeVolume(diff float32) (float32, error) {
 	volume := pulse.volume + diff
 
 	var err error
-	withMeasure("pulse: set-sink-volume", func() {
+	withMeasure("pulse:set-sink-volume", func() {
 		err = pulse.client.SetSinkVolume(pulse.info.DefaultSink, volume)
 	})
 
@@ -163,6 +178,15 @@ func (pulse *Pulse) NewSink(path dbus.ObjectPath) {
 // SinkRemoved is called when a sink is removed.
 func (pulse *Pulse) SinkRemoved(path dbus.ObjectPath) {
 	logger.Infof("dbus: sink removed, reconnecting")
+
+	err := pulse.Reconnect()
+	if err != nil {
+		logger.Error(karma.Format(err, "unable to reconnect to pulseaudio"))
+	}
+}
+
+func (pulse *Pulse) DeviceActivePortUpdated(dbus.ObjectPath, dbus.ObjectPath) {
+	logger.Infof("dbus: sink active port updated, reconnecting")
 
 	err := pulse.Reconnect()
 	if err != nil {

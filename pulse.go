@@ -38,14 +38,16 @@ func (pulse *Pulse) Close() {
 }
 
 func (pulse *Pulse) Reconnect() error {
-	pulse.Lock()
-	defer pulse.Unlock()
-
 	pulse.Close()
+
+	err := pulse.initNative()
+	if err != nil {
+		return err
+	}
 
 	pulse.Once = sync.Once{}
 
-	return pulse.initNative()
+	return nil
 }
 
 func initPulse() (*Pulse, error) {
@@ -106,8 +108,9 @@ func (pulse *Pulse) initBus() error {
 
 func (pulse *Pulse) initNative() error {
 	var err error
+	var client *native.Client
 	withMeasure("pulse:connect", func() {
-		pulse.client, err = native.NewClient()
+		client, err = native.NewClient()
 	})
 	if err != nil {
 		return karma.Format(
@@ -116,8 +119,9 @@ func (pulse *Pulse) initNative() error {
 		)
 	}
 
+	var info *native.Server
 	withMeasure("pulse:get-server-info", func() {
-		pulse.info, err = pulse.client.ServerInfo()
+		info, err = client.ServerInfo()
 	})
 	if err != nil {
 		return karma.Format(
@@ -126,8 +130,9 @@ func (pulse *Pulse) initNative() error {
 		)
 	}
 
+	var volume float32
 	withMeasure("pulse:get-volume", func() {
-		pulse.volume, err = pulse.client.Volume()
+		volume, err = client.Volume()
 	})
 	if err != nil {
 		return karma.Format(
@@ -136,19 +141,20 @@ func (pulse *Pulse) initNative() error {
 		)
 	}
 
+	pulse.client = client
+	pulse.info = info
+	pulse.volume = volume
+	pulse.Once = sync.Once{}
+
 	return nil
 }
 
 func (pulse *Pulse) GetVolume() float32 {
-	pulse.Lock()
 	value := pulse.volume
-	pulse.Unlock()
 	return value
 }
 
 func (pulse *Pulse) ChangeVolume(diff float32) (float32, error) {
-	pulse.Lock()
-
 	volume := pulse.volume + diff
 
 	var err error
@@ -159,8 +165,6 @@ func (pulse *Pulse) ChangeVolume(diff float32) (float32, error) {
 	if err == nil {
 		pulse.volume = volume
 	}
-
-	pulse.Unlock()
 
 	return volume, err
 }

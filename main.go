@@ -6,7 +6,6 @@ import (
 
 	"github.com/docopt/docopt-go"
 	"github.com/kovetskiy/lorg"
-	"github.com/reconquest/colorgful"
 )
 
 var (
@@ -30,6 +29,8 @@ Options:
                              [default: ` + defaultSocketPath + `]
   -f --volume-format <fmt>  Format volume value when printing it.
                              [default: %.2f]
+  --deadline <ms>           Use specified deadline for every pulseaudio operation.
+                             [default: 50]
   -h --help                 Show this screen.
   --version                 Show version.
 `
@@ -46,9 +47,8 @@ func main() {
 	}
 
 	logger.SetFormat(
-		colorgful.MustApplyDefaultTheme(
+		lorg.NewFormat(
 			"${time} ${level:%s:left} ${prefix}%s",
-			colorgful.Default,
 		),
 	)
 

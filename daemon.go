@@ -4,13 +4,33 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"syscall"
+	"time"
 
 	"github.com/reconquest/karma-go"
 	"github.com/reconquest/sign-go"
 )
 
+type Daemon struct {
+	pulse    *Pulse
+	socket   *Socket
+	deadline *Deadline
+}
+
 func handleDaemon(args map[string]interface{}) error {
+	deadlineMs, err := strconv.ParseInt(args["--deadline"].(string), 10, 64)
+	if err != nil {
+		return karma.Format(
+			err,
+			"unable to parse deadline",
+		)
+	}
+
+	deadline := &Deadline{
+		duration: time.Duration(deadlineMs) * time.Millisecond,
+	}
+
 	logger.Infof("initializing pulseaudio connection")
 
 	pulse, err := initPulse()
@@ -49,23 +69,46 @@ func handleDaemon(args map[string]interface{}) error {
 
 	logger.Infof("listening for connections")
 
-	serveDaemon(pulse, socket)
+	serveDaemon(pulse, socket, deadline)
 
 	return nil
 }
 
-func serveDaemon(pulse *Pulse, socket *Socket) {
+func serveDaemon(pulse *Pulse, socket *Socket, deadline *Deadline) {
+	deadline.onTimedOut = func() {
+		logger.Errorf(
+			"operation timed out after %v, resetting connection and retrying",
+			deadline.duration,
+		)
+
+		err := pulse.Reconnect()
+		if err != nil {
+			logger.Error(err)
+		}
+
+		logger.Warningf("re-established connection to pulseaudio")
+	}
+
+	daemon := &Daemon{
+		pulse:    pulse,
+		socket:   socket,
+		deadline: deadline,
+	}
+
 	for {
 		conn, err := socket.Accept()
 		if err != nil {
 			break
 		}
 
-		go serveDaemonConnection(pulse, socket, conn)
+		go daemon.serve(conn)
 	}
 }
 
-func serveDaemonConnection(pulse *Pulse, socket *Socket, conn net.Conn) {
+func (daemon *Daemon) serve(conn net.Conn) {
+	daemon.pulse.Lock()
+	defer daemon.pulse.Unlock()
+
 	serving := measure("serve connection")
 
 	defer serving.stop()
@@ -84,39 +127,12 @@ func serveDaemonConnection(pulse *Pulse, socket *Socket, conn net.Conn) {
 	var reply Packetable
 	switch raw.Signature() {
 	case SignatureChange:
-		var volume float32
-		var retried bool
-
-		for {
-			volume, err = pulse.ChangeVolume(raw.(*PacketChange).Diff)
-			if isNoSuchEntityError(err) {
-				if retried {
-					break
-				}
-
-				err := pulse.Reconnect()
-				if err != nil {
-					err = karma.Format(
-						err,
-						"unable to reconnect to pulseaudio",
-					)
-					break
-				}
-
-				retried = true
-			}
-
-			break
-		}
-
-		if err != nil {
-			reply = PacketError{err.Error()}
-		} else {
-			reply = PacketVolume{volume}
-		}
+		daemon.deadline.do(func() {
+			reply = daemon.changeVolume(raw.(*PacketChange))
+		})
 
 	case SignatureGet:
-		reply = PacketVolume{pulse.GetVolume()}
+		reply = PacketVolume{daemon.pulse.GetVolume()}
 
 	default:
 		reply = PacketError{
@@ -136,4 +152,38 @@ func serveDaemonConnection(pulse *Pulse, socket *Socket, conn net.Conn) {
 	if err != nil {
 		logger.Error(err)
 	}
+}
+
+func (daemon *Daemon) changeVolume(packet *PacketChange) Packetable {
+	var volume float32
+	var retried bool
+	var err error
+
+	for {
+		volume, err = daemon.pulse.ChangeVolume(packet.Diff)
+		if isNoSuchEntityError(err) {
+			if retried {
+				break
+			}
+
+			err := daemon.pulse.Reconnect()
+			if err != nil {
+				err = karma.Format(
+					err,
+					"unable to reconnect to pulseaudio",
+				)
+				break
+			}
+
+			retried = true
+		}
+
+		break
+	}
+
+	if err != nil {
+		return PacketError{err.Error()}
+	}
+
+	return PacketVolume{volume}
 }

@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"sync"
 	"syscall"
 	"time"
 
@@ -14,7 +15,6 @@ import (
 
 type Daemon struct {
 	pulse    *Pulse
-	socket   *Socket
 	deadline *Deadline
 }
 
@@ -53,13 +53,35 @@ func handleDaemon(args map[string]interface{}) error {
 		)
 	}
 
+	var tcp net.Listener
+	if addr, ok := args["--tcp"].(string); ok {
+		logger.Infof("initializing tcp socket")
+
+		tcp, err = net.Listen("tcp", addr)
+		if err != nil {
+			return karma.Format(
+				err,
+				"unable to initialize tcp socket: %s", addr,
+			)
+		}
+	}
+
 	defer pulse.Close()
 	defer socket.Close()
+
+	if tcp != nil {
+		defer tcp.Close()
+	}
 
 	go sign.Notify(func(os.Signal) bool {
 		err := socket.Close()
 		if err != nil {
 			logger.Error(err, "unable to gracefully stop listening unix socket")
+		}
+
+		if tcp != nil {
+			err = tcp.Close()
+			logger.Error(err, "unable to gracefully stop listening tcp socket")
 		}
 
 		pulse.Close()
@@ -69,12 +91,12 @@ func handleDaemon(args map[string]interface{}) error {
 
 	logger.Infof("listening for connections")
 
-	serveDaemon(pulse, socket, deadline)
+	serveDaemon(pulse, deadline, socket, tcp)
 
 	return nil
 }
 
-func serveDaemon(pulse *Pulse, socket *Socket, deadline *Deadline) {
+func serveDaemon(pulse *Pulse, deadline *Deadline, listeners ...net.Listener) {
 	deadline.onTimedOut = func() {
 		logger.Errorf(
 			"operation timed out after %v, resetting connection and retrying",
@@ -91,18 +113,30 @@ func serveDaemon(pulse *Pulse, socket *Socket, deadline *Deadline) {
 
 	daemon := &Daemon{
 		pulse:    pulse,
-		socket:   socket,
 		deadline: deadline,
 	}
 
-	for {
-		conn, err := socket.Accept()
-		if err != nil {
-			break
+	wg := sync.WaitGroup{}
+	for _, listener := range listeners {
+		if listener == nil {
+			continue
 		}
 
-		go daemon.serve(conn)
+		wg.Add(1)
+		go func(listener net.Listener) {
+			defer wg.Done()
+			for {
+				conn, err := listener.Accept()
+				if err != nil {
+					break
+				}
+
+				go daemon.serve(conn)
+			}
+		}(listener)
 	}
+
+	wg.Wait()
 }
 
 func (daemon *Daemon) serve(conn net.Conn) {

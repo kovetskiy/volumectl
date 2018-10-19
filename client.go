@@ -22,13 +22,26 @@ func handleClient(args map[string]interface{}) error {
 		percent = float32(value) / 100
 	}
 
-	conn, err := net.Dial("unix", args["--socket"].(string))
-	if err != nil {
-		return karma.Format(
-			err,
-			"unable to connect to unix socket: %s",
-			args["--socket"].(string),
-		)
+	var conn net.Conn
+	var err error
+	if addr, ok := args["--tcp"].(string); ok {
+		conn, err = net.Dial("tcp", addr)
+		if err != nil {
+			return karma.Format(
+				err,
+				"unable to connect to addr socket: %s",
+				addr,
+			)
+		}
+	} else {
+		conn, err = net.Dial("unix", args["--socket"].(string))
+		if err != nil {
+			return karma.Format(
+				err,
+				"unable to connect to unix socket: %s",
+				args["--socket"].(string),
+			)
+		}
 	}
 
 	defer conn.Close()

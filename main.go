@@ -13,20 +13,21 @@ var (
 
 	version = "[manual build]"
 
-	usage = "volume " + version + `
+	usage = "volumectl " + version + `
 
 Usage:
-  volume [options] -D
-  volume [options] up <percent>
-  volume [options] down <percent>
-  volume [options] get
-  volume -h | --help
-  volume --version
+  volumectl [options] -D
+  volumectl [options] up <percent>
+  volumectl [options] down <percent>
+  volumectl [options] get
+  volumectl -h | --help
+  volumectl --version
 
 Options:
   -D --daemon               Start volume daemon (client for pulseaudio).
   --socket <path>           Path to daemon socket.
                              [default: ` + defaultSocketPath + `]
+  -t --tcp <addr>           TCP address for control connections.
   -f --volume-format <fmt>  Format volume value when printing it.
                              [default: %.2f]
   --deadline <ms>           Use specified deadline for every pulseaudio operation.

@@ -33,8 +33,8 @@ func (measurement *measurement) add(title ...interface{}) {
 func (measurement *measurement) stop() {
 	finished := time.Now()
 
-	fmt.Printf(
-		"TIME %-30s %.2fms\n",
+	logger.Debugf(
+		"time: %-30s %.2fms",
 		fmt.Sprint(measurement.title),
 		finished.Sub(measurement.started).Seconds()*1000.0,
 	)

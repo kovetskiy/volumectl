@@ -33,6 +33,7 @@ Options:
   --deadline <ms>           Use specified deadline for every pulseaudio operation.
                              [default: 50]
   -h --help                 Show this screen.
+  --debug                   Enable debug messages.
   --version                 Show version.
 `
 )
@@ -55,7 +56,9 @@ func main() {
 
 	logger.SetIndentLines(true)
 
-	logger.SetLevel(lorg.LevelDebug)
+	if args["--debug"].(bool) {
+		logger.SetLevel(lorg.LevelDebug)
+	}
 
 	registerPackets()
 

@@ -17,6 +17,19 @@ type PulseSubscriber interface {
 	bus.OnNewSink
 	bus.OnSinkRemoved
 	bus.OnDeviceActivePortUpdated
+
+	bus.OnNewPlaybackStream
+	bus.OnFallbackSinkUpdated
+	bus.OnFallbackSinkUnset
+	//bus.OnNewSink
+	//bus.OnSinkRemoved
+	//bus.OnNewPlaybackStream
+	bus.OnPlaybackStreamRemoved
+	//bus.OnDeviceVolumeUpdated
+	bus.OnDeviceMuteUpdated
+	//bus.OnStreamVolumeUpdated
+	bus.OnStreamMuteUpdated
+	//bus.OnDeviceActivePortUpdated
 }
 
 type Pulse struct {
@@ -208,4 +221,33 @@ func isNoSuchEntityError(err error) bool {
 	}
 
 	return false
+}
+
+func (pulse *Pulse) FallbackSinkUpdated(dbus.ObjectPath) {
+	logger.Infof("dbus: fallback sink updated, reconnecting")
+
+	err := pulse.Reconnect()
+	if err != nil {
+		logger.Error(karma.Format(err, "unable to reconnect to pulseaudio"))
+	}
+}
+
+func (pulse *Pulse) FallbackSinkUnset() {
+	logger.Debugf("dbus: FallbackSinkUnset")
+}
+
+func (pulse *Pulse) NewPlaybackStream(dbus.ObjectPath) {
+	logger.Debugf("dbus: NewPlaybackStream")
+}
+
+func (pulse *Pulse) PlaybackStreamRemoved(dbus.ObjectPath) {
+	logger.Debugf("dbus: PlaybackStreamRemoved")
+}
+
+func (pulse *Pulse) DeviceMuteUpdated(dbus.ObjectPath, bool) {
+	logger.Debugf("dbus: DeviceMuteUpdated")
+}
+
+func (pulse *Pulse) StreamMuteUpdated(dbus.ObjectPath, bool) {
+	logger.Debugf("dbus: StreamMuteUpdated")
 }

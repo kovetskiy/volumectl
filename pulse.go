@@ -167,9 +167,7 @@ func (pulse *Pulse) GetVolume() float32 {
 	return value
 }
 
-func (pulse *Pulse) ChangeVolume(diff float32) (float32, error) {
-	volume := pulse.volume + diff
-
+func (pulse *Pulse) SetVolume(volume float32) (float32, error) {
 	var err error
 	withMeasure("pulse:set-sink-volume", func() {
 		err = pulse.client.SetSinkVolume(pulse.info.DefaultSink, volume)

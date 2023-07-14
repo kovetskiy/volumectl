@@ -16,6 +16,8 @@ import (
 type Daemon struct {
 	pulse    *Pulse
 	deadline *Deadline
+
+	maxVolume float32
 }
 
 func handleDaemon(args map[string]interface{}) error {
@@ -24,6 +26,14 @@ func handleDaemon(args map[string]interface{}) error {
 		return karma.Format(
 			err,
 			"unable to parse deadline",
+		)
+	}
+
+	maxVolume, err := strconv.ParseInt(args["--max-volume"].(string), 10, 64)
+	if err != nil {
+		return karma.Format(
+			err,
+			"unable to parse max-volume",
 		)
 	}
 
@@ -89,14 +99,14 @@ func handleDaemon(args map[string]interface{}) error {
 		return false
 	}, syscall.SIGINT, syscall.SIGKILL, syscall.SIGTERM)
 
-	logger.Infof("listening for connections")
+	logger.Infof("listening for connections [max-volume: %v]", maxVolume)
 
-	serveDaemon(pulse, deadline, socket, tcp)
+	serveDaemon(pulse, maxVolume, deadline, socket, tcp)
 
 	return nil
 }
 
-func serveDaemon(pulse *Pulse, deadline *Deadline, listeners ...net.Listener) {
+func serveDaemon(pulse *Pulse, maxVolume int64, deadline *Deadline, listeners ...net.Listener) {
 	deadline.onTimedOut = func() {
 		logger.Errorf(
 			"operation timed out after %v, resetting connection and retrying",
@@ -114,6 +124,8 @@ func serveDaemon(pulse *Pulse, deadline *Deadline, listeners ...net.Listener) {
 	daemon := &Daemon{
 		pulse:    pulse,
 		deadline: deadline,
+
+		maxVolume: float32(maxVolume) / 100,
 	}
 
 	wg := sync.WaitGroup{}
@@ -194,18 +206,26 @@ func (daemon *Daemon) changeVolume(packet *PacketChange) Packetable {
 	var err error
 
 	for {
-		volume, err = daemon.pulse.ChangeVolume(packet.Diff)
+		previousVolume := daemon.pulse.GetVolume()
+
+		newVolume := previousVolume + packet.Diff
+		if newVolume > daemon.maxVolume && daemon.maxVolume > 0.0 {
+			newVolume = daemon.maxVolume
+		}
+
+		volume, err = daemon.pulse.SetVolume(newVolume)
 		if isNoSuchEntityError(err) {
 			if retried {
 				break
 			}
 
-			err := daemon.pulse.Reconnect()
+			err = daemon.pulse.Reconnect()
 			if err != nil {
 				err = karma.Format(
 					err,
 					"unable to reconnect to pulseaudio",
 				)
+
 				break
 			}
 

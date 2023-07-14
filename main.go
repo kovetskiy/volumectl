@@ -24,17 +24,18 @@ Usage:
   volumectl --version
 
 Options:
-  -D --daemon               Start volume daemon (client for pulseaudio).
-  --socket <path>           Path to daemon socket.
-                             [default: ` + defaultSocketPath + `]
-  -t --tcp <addr>           TCP address for control connections.
-  -f --volume-format <fmt>  Format volume value when printing it.
-                             [default: %.2f]
-  --deadline <ms>           Use specified deadline for every pulseaudio operation.
-                             [default: 50]
-  -h --help                 Show this screen.
-  --debug                   Enable debug messages.
-  --version                 Show version.
+  -D --daemon                Start volume daemon (client for pulseaudio).
+  --socket <path>            Path to daemon socket.
+                              [default: ` + defaultSocketPath + `]
+  -t --tcp <addr>            TCP address for control connections.
+  -f --volume-format <fmt>   Format volume value when printing it.
+                              [default: %.2f]
+  --deadline <ms>            Use specified deadline for every pulseaudio operation.
+                              [default: 50]
+  -m --max-volume <percent>  Maximum volume value. [default: 0]
+  -h --help                  Show this screen.
+  --debug                    Enable debug messages.
+  --version                  Show version.
 `
 )
 
